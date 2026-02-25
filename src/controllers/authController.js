@@ -87,7 +87,7 @@ async function login(req, res) {
 async function generateApiKey(req, res) {
     try {
         const userId = req.user.id;
-        const apiKey = crypto.randomBytes(32).toString('hex');
+        const apiKey = crypto.randomBytes(16).toString('hex');
 
         await dbRun('UPDATE users SET api_key = ? WHERE id = ?', [apiKey, userId]);
 
