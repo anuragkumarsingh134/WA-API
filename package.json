@@ -1,15 +1,23 @@
 {
-  "name": "simple-whatsapp",
+  "name": "wa-api",
   "version": "1.0.0",
-  "description": "",
+  "description": "WhatsApp Multi-Session API with Dashboard UI — powered by Baileys & better-sqlite3",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "whatsapp",
+    "api",
+    "baileys",
+    "multi-session"
+  ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
@@ -21,11 +29,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mime-types": "^3.0.2",
-    "mysql2": "^3.18.0",
-    "node-cache": "^5.1.2",
     "pino": "^10.3.1",
-    "qrcode": "^1.5.4",
-    "uuid": "^13.0.0"
+    "qrcode": "^1.5.4"
   }
 }
