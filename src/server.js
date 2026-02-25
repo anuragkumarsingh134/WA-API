@@ -58,9 +58,8 @@ app.use((err, req, res, next) => {
 // ── Start ───────────────────────────────────────────────────
 async function start() {
     try {
-        // Initialize database
-        await initializeDatabase();
-        console.log('Database ready.');
+        // Initialize database (synchronous with better-sqlite3)
+        initializeDatabase();
 
         // Start HTTP server
         app.listen(PORT, () => {
