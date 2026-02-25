@@ -125,4 +125,77 @@ async function listDevices(req, res) {
     }
 }
 
-module.exports = { createDevice, getQR, getStatus, listDevices };
+/**
+ * DELETE /device/delete?deviceId=xxxx
+ * Requires JWT. Deletes device record, closes session, and removes auth state.
+ */
+async function deleteDevice(req, res) {
+    try {
+        const { deviceId } = req.query;
+        const userId = req.user.id;
+
+        if (!deviceId) {
+            return res.status(400).json({ success: false, error: 'deviceId query parameter is required' });
+        }
+
+        const device = await dbGet('SELECT * FROM devices WHERE device_id = ? AND user_id = ?', [deviceId, userId]);
+        if (!device) {
+            return res.status(404).json({ success: false, error: 'Device not found or access denied' });
+        }
+
+        // Close Baileys session and clean up auth files
+        await whatsappService.deleteSession(deviceId);
+
+        // Delete message logs for this device
+        await dbRun('DELETE FROM messages WHERE device_id = ?', [deviceId]);
+
+        // Delete device record
+        await dbRun('DELETE FROM devices WHERE device_id = ?', [deviceId]);
+
+        return res.json({
+            success: true,
+            message: `Device ${deviceId} and all its data have been deleted`,
+        });
+    } catch (err) {
+        console.error('Delete device error:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+}
+
+/**
+ * GET /device/profile-photo?deviceId=xxxx
+ * Requires JWT. Returns the WhatsApp profile picture URL.
+ */
+async function getProfilePhoto(req, res) {
+    try {
+        const { deviceId } = req.query;
+        const userId = req.user.id;
+
+        if (!deviceId) {
+            return res.status(400).json({ success: false, error: 'deviceId query parameter is required' });
+        }
+
+        const device = await dbGet('SELECT * FROM devices WHERE device_id = ? AND user_id = ?', [deviceId, userId]);
+        if (!device) {
+            return res.status(404).json({ success: false, error: 'Device not found or access denied' });
+        }
+
+        if (device.status !== 'connected') {
+            return res.status(400).json({ success: false, error: 'Device is not connected' });
+        }
+
+        const photoUrl = await whatsappService.getProfilePicture(deviceId);
+
+        return res.json({
+            success: true,
+            deviceId,
+            profilePhoto: photoUrl,
+            message: photoUrl ? 'Profile photo retrieved' : 'No profile photo set',
+        });
+    } catch (err) {
+        console.error('Get profile photo error:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+}
+
+module.exports = { createDevice, getQR, getStatus, listDevices, deleteDevice, getProfilePhoto };

@@ -101,6 +101,22 @@ function getQR(deviceId) {
 }
 
 /**
+ * Get profile picture URL for a connected device.
+ */
+async function getProfilePicture(deviceId) {
+    const socket = sessionManager.getSession(deviceId);
+    if (!socket) return null;
+    try {
+        const jid = socket.user?.id;
+        if (!jid) return null;
+        const url = await socket.profilePictureUrl(jid, 'image');
+        return url || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
  * Send a text message via a connected device.
  */
 async function sendTextMessage(deviceId, number, message) {
@@ -207,10 +223,37 @@ function formatJID(number) {
     return `${clean}@s.whatsapp.net`;
 }
 
+/**
+ * Delete a session: close socket, remove from memory, delete auth files.
+ */
+async function deleteSession(deviceId) {
+    const socket = sessionManager.getSession(deviceId);
+    if (socket) {
+        try {
+            socket.ev.removeAllListeners();
+            await socket.logout().catch(() => { });
+            socket.end();
+        } catch (_) { }
+    }
+    sessionManager.removeSession(deviceId);
+
+    // Remove auth state from disk
+    const authDir = path.join(AUTH_DIR, deviceId);
+    try {
+        if (fs.existsSync(authDir)) {
+            fs.rmSync(authDir, { recursive: true, force: true });
+        }
+    } catch (_) { }
+
+    console.log(`[${deviceId}] Session deleted and cleaned up`);
+}
+
 module.exports = {
     createSession,
     getQR,
+    getProfilePicture,
     sendTextMessage,
     sendFileMessage,
     restoreAllSessions,
+    deleteSession,
 };

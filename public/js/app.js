@@ -132,7 +132,10 @@ async function loadDevices() {
         </div>
         <div class="device-actions">
           <span class="badge ${statusBadge(d.status)}">${d.status}</span>
-          ${d.status !== 'connected' ? `<button class="btn btn-primary btn-sm" onclick="showQR('${esc(d.device_id)}')">QR</button>` : ''}
+          <button class="btn btn-outline btn-sm" onclick="viewDeviceStatus('${esc(d.device_id)}')" title="View Status">📋</button>
+          ${d.status === 'connected' ? `<button class="btn btn-outline btn-sm" onclick="viewProfilePhoto('${esc(d.device_id)}')" title="Profile Photo">🖼️</button>` : ''}
+          ${d.status !== 'connected' ? `<button class="btn btn-primary btn-sm" onclick="showQR('${esc(d.device_id)}')" title="Scan QR">QR</button>` : ''}
+          <button class="btn btn-red btn-sm" onclick="deleteDevice('${esc(d.device_id)}')" title="Delete">🗑️</button>
         </div>
       </div>
     `).join('');
@@ -163,6 +166,89 @@ function openCreateDeviceModal() {
     document.getElementById('newDeviceId').value = '';
     document.getElementById('newSessionName').value = '';
     document.getElementById('createDeviceModal').classList.remove('hidden');
+}
+
+// View device status / profile
+async function viewDeviceStatus(deviceId) {
+    try {
+        const res = await fetch(`${API}/device/status?deviceId=${encodeURIComponent(deviceId)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const d = data;
+        const statusClass = statusBadge(d.status);
+        const html = `
+            <div style="text-align:center;margin-bottom:1rem">
+                <div style="font-size:3rem;margin-bottom:.5rem">📱</div>
+                <div style="font-size:1.1rem;font-weight:700;color:var(--navy)">${esc(d.sessionName)}</div>
+                <div style="font-size:.82rem;color:var(--gray-400);font-family:Consolas,monospace">${esc(d.deviceId)}</div>
+            </div>
+            <table class="docs-table" style="margin-top:.75rem">
+                <tr><td style="font-weight:600;color:var(--gray-500)">Status</td><td><span class="badge ${statusClass}">${d.status}</span></td></tr>
+                <tr><td style="font-weight:600;color:var(--gray-500)">Created</td><td>${new Date(d.createdAt).toLocaleString()}</td></tr>
+                <tr><td style="font-weight:600;color:var(--gray-500)">Device ID</td><td style="font-family:Consolas,monospace;font-size:.85rem">${esc(d.deviceId)}</td></tr>
+            </table>`;
+
+        // Reuse the QR modal container for status display
+        document.getElementById('qrModal').querySelector('h3').textContent = 'Device Profile';
+        document.getElementById('qrContainer').innerHTML = html;
+        document.getElementById('qrModal').classList.remove('hidden');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// Delete a device
+async function deleteDevice(deviceId) {
+    if (!confirm(`Are you sure you want to delete device "${deviceId}" and all its data? This cannot be undone.`)) {
+        return;
+    }
+    try {
+        const res = await fetch(`${API}/device/delete?deviceId=${encodeURIComponent(deviceId)}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        toast('Device deleted successfully', 'success');
+        loadDevices();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// View profile photo
+async function viewProfilePhoto(deviceId) {
+    document.getElementById('qrModal').querySelector('h3').textContent = 'Profile Photo';
+    document.getElementById('qrContainer').innerHTML = '<p class="text-gray">Loading profile photo...</p>';
+    document.getElementById('qrModal').classList.remove('hidden');
+
+    try {
+        const res = await fetch(`${API}/device/profile-photo?deviceId=${encodeURIComponent(deviceId)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        if (data.profilePhoto) {
+            document.getElementById('qrContainer').innerHTML = `
+                <div style="text-align:center">
+                    <img src="${data.profilePhoto}" alt="Profile Photo" style="max-width:260px;border-radius:50%;border:3px solid var(--green);box-shadow:var(--shadow-md)">
+                    <p style="margin-top:1rem;font-size:.88rem;font-weight:600;color:var(--navy)">${esc(deviceId)}</p>
+                </div>`;
+        } else {
+            document.getElementById('qrContainer').innerHTML = `
+                <div style="text-align:center;padding:2rem">
+                    <div style="font-size:3rem;margin-bottom:.75rem">👤</div>
+                    <p style="color:var(--gray-500);font-size:.9rem">No profile photo set for this device</p>
+                </div>`;
+        }
+    } catch (err) {
+        document.getElementById('qrContainer').innerHTML = `<p class="text-red">${esc(err.message)}</p>`;
+    }
 }
 
 async function handleCreateDevice(e) {
