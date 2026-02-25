@@ -903,3 +903,97 @@ body {
         display: none !important;
     }
 }
+
+/* ── Pricing Cards ───────────────────────────────────────────── */
+.plan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1.25rem;
+}
+
+.plan-card {
+    background: var(--card-bg);
+    border: 1px solid var(--gray-100);
+    border-radius: 12px;
+    padding: 1.75rem 1.5rem;
+    text-align: center;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.plan-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(99, 102, 241, 0.15);
+}
+
+.plan-popular {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary), 0 4px 20px rgba(99, 102, 241, 0.2);
+}
+
+.plan-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    padding: .25rem 1rem;
+    border-radius: 20px;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.plan-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: .25rem;
+}
+
+.plan-desc {
+    font-size: .8rem;
+    color: var(--gray-400);
+    margin-bottom: 1rem;
+    min-height: 1.2rem;
+}
+
+.plan-price {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--primary);
+    margin-bottom: 1rem;
+}
+
+.plan-price span {
+    font-size: .8rem;
+    font-weight: 400;
+    color: var(--gray-400);
+}
+
+.plan-features {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem;
+    text-align: left;
+}
+
+.plan-features li {
+    padding: .4rem 0;
+    font-size: .85rem;
+    color: var(--gray-300);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.plan-features li:last-child {
+    border-bottom: none;
+}
+
+.plan-btn {
+    width: 100%;
+}
+
+.mt-2 {
+    margin-top: 1.25rem;
+}

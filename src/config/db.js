@@ -63,6 +63,36 @@ function initializeDatabase() {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      price REAL NOT NULL,
+      duration_days INTEGER NOT NULL DEFAULT 30,
+      device_limit INTEGER NOT NULL DEFAULT 3,
+      message_limit INTEGER NOT NULL DEFAULT 100,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      plan_id INTEGER NOT NULL,
+      cf_order_id TEXT UNIQUE,
+      amount REAL NOT NULL,
+      status TEXT DEFAULT 'pending',
+      payment_id TEXT,
+      cf_payment_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (plan_id) REFERENCES plans(id)
+    )
+  `);
+
   // ── Safe migrations for existing databases ───────────────
   const migrations = [
     { column: 'role', sql: "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'" },
@@ -72,6 +102,8 @@ function initializeDatabase() {
     { column: 'last_message_reset', sql: 'ALTER TABLE users ADD COLUMN last_message_reset DATE' },
     { column: 'trial_expires_at', sql: 'ALTER TABLE users ADD COLUMN trial_expires_at DATETIME' },
     { column: 'is_active', sql: 'ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1' },
+    { column: 'current_plan_id', sql: 'ALTER TABLE users ADD COLUMN current_plan_id INTEGER' },
+    { column: 'plan_expires_at', sql: 'ALTER TABLE users ADD COLUMN plan_expires_at DATETIME' },
   ];
 
   const tableInfo = db.prepare('PRAGMA table_info(users)').all();

@@ -11,13 +11,18 @@ const authRoutes = require('./routes/authRoutes');
 const deviceRoutes = require('./routes/deviceRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const planRoutes = require('./routes/planRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ───────────────────────────────────────────────
 app.use(cors());
-app.use(express.json());
+// Capture raw body for Cashfree webhook signature verification
+app.use(express.json({
+    verify: (req, res, buf) => { req.rawBody = buf.toString(); }
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -36,6 +41,8 @@ app.use('/auth', authRoutes);
 app.use('/device', deviceRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/admin', adminRoutes);
+app.use('/plans', planRoutes);
+app.use('/payment', paymentRoutes);
 
 // Health check
 app.get('/', (req, res) => {

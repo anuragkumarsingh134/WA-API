@@ -433,7 +433,7 @@ function switchSection(section) {
     document.querySelectorAll('.main-content > section').forEach(s => s.classList.add('hidden'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
-    const sectionMap = { devices: 'sectionDevices', sendMessage: 'sectionSendMessage', apiKey: 'sectionApiKey', docs: 'sectionDocs', admin: 'sectionAdmin' };
+    const sectionMap = { devices: 'sectionDevices', sendMessage: 'sectionSendMessage', apiKey: 'sectionApiKey', docs: 'sectionDocs', plans: 'sectionPlans', admin: 'sectionAdmin' };
     document.getElementById(sectionMap[section])?.classList.remove('hidden');
     document.querySelector(`.nav-item[data-section="${section}"]`)?.classList.add('active');
 
@@ -441,7 +441,8 @@ function switchSection(section) {
     if (section === 'devices') loadDevices();
     if (section === 'sendMessage') loadDevices(); // refresh selects
     if (section === 'docs') renderDocs();
-    if (section === 'admin') loadAdminUsers();
+    if (section === 'plans') { loadPlans(); loadPaymentHistory(); }
+    if (section === 'admin') { loadAdminUsers(); loadAdminPlans(); }
 
     // Close mobile sidebar
     document.getElementById('sidebar').classList.remove('open');
@@ -768,6 +769,239 @@ async function adminDeleteUser(userId) {
 
         toast('User deleted', 'success');
         loadAdminUsers();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// ── Plans ───────────────────────────────────────────────────
+async function loadPlans() {
+    try {
+        const res = await fetch(`${API}/plans/list`);
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const container = document.getElementById('planCards');
+
+        // Show current plan info
+        const userRes = await fetch(`${API}/auth/me`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => null);
+
+        let currentUser = null;
+        if (userRes && userRes.ok) {
+            const userData = await userRes.json();
+            if (userData.success) currentUser = userData.user;
+        }
+
+        if (currentUser && currentUser.current_plan_id) {
+            const planCard = document.getElementById('currentPlanCard');
+            planCard.style.display = '';
+            const expiry = currentUser.plan_expires_at ? new Date(currentUser.plan_expires_at) : null;
+            const daysLeft = expiry ? Math.max(0, Math.ceil((expiry - Date.now()) / 86400000)) : 0;
+            document.getElementById('currentPlanInfo').innerHTML = `
+                <div style="padding:1rem;display:flex;gap:2rem;flex-wrap:wrap;align-items:center">
+                    <div><strong>Devices:</strong> ${currentUser.device_limit}</div>
+                    <div><strong>Messages/day:</strong> ${currentUser.message_limit}</div>
+                    <div><strong>Expires:</strong> ${expiry ? expiry.toLocaleDateString() : 'Never'}</div>
+                    <div><span class="badge ${daysLeft > 7 ? 'badge-green' : daysLeft > 0 ? 'badge-yellow' : 'badge-red'}">${daysLeft > 0 ? daysLeft + ' days left' : 'Expired'}</span></div>
+                </div>`;
+        } else {
+            document.getElementById('currentPlanCard').style.display = 'none';
+        }
+
+        if (!data.plans || data.plans.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="icon">💎</div><p>No plans available yet.</p></div>';
+            return;
+        }
+
+        container.innerHTML = data.plans.map((p, i) => {
+            const isPopular = i === Math.floor(data.plans.length / 2);
+            return `
+            <div class="plan-card ${isPopular ? 'plan-popular' : ''}">
+                ${isPopular ? '<div class="plan-badge">Most Popular</div>' : ''}
+                <h3 class="plan-name">${esc(p.name)}</h3>
+                <p class="plan-desc">${esc(p.description || '')}</p>
+                <div class="plan-price">₹${p.price}<span>/for ${p.duration_days} days</span></div>
+                <ul class="plan-features">
+                    <li>📱 ${p.device_limit} Devices</li>
+                    <li>✉️ ${p.message_limit} Messages/day</li>
+                    <li>📅 ${p.duration_days} Days validity</li>
+                </ul>
+                <button class="btn btn-primary plan-btn" onclick="buyPlan(${p.id})">Buy Now</button>
+            </div>`;
+        }).join('');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function buyPlan(planId) {
+    try {
+        toast('Creating payment order...', 'info');
+        const res = await fetch(`${API}/payment/create-order`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ planId })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        // Init Cashfree checkout
+        const cashfree = Cashfree({ mode: data.environment === 'production' ? 'production' : 'sandbox' });
+        await cashfree.checkout({
+            paymentSessionId: data.paymentSessionId,
+            redirectTarget: '_self',
+        });
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function loadPaymentHistory() {
+    try {
+        const res = await fetch(`${API}/payment/history`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const container = document.getElementById('paymentHistory');
+        if (!data.orders || data.orders.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>No payments yet.</p></div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="docs-table" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Plan</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.orders.map(o => `
+                        <tr>
+                            <td style="font-weight:600">${esc(o.plan_name)}</td>
+                            <td>₹${o.amount}</td>
+                            <td><span class="badge ${o.status === 'paid' ? 'badge-green' : o.status === 'pending' ? 'badge-yellow' : 'badge-red'}">${o.status}</span></td>
+                            <td style="font-size:.8rem">${new Date(o.created_at).toLocaleDateString()}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+// ── Admin Plans ─────────────────────────────────────────────
+function toggleCreatePlan() {
+    document.getElementById('createPlanForm').classList.toggle('hidden');
+}
+
+async function handleCreatePlan(e) {
+    e.preventDefault();
+    try {
+        const body = {
+            name: document.getElementById('newPlanName').value,
+            description: document.getElementById('newPlanDesc').value,
+            price: parseFloat(document.getElementById('newPlanPrice').value),
+            durationDays: parseInt(document.getElementById('newPlanDuration').value),
+            deviceLimit: parseInt(document.getElementById('newPlanDevices').value),
+            messageLimit: parseInt(document.getElementById('newPlanMessages').value),
+        };
+
+        const res = await fetch(`${API}/plans/create`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        toast('Plan created!', 'success');
+        toggleCreatePlan();
+        // Clear form
+        ['newPlanName', 'newPlanDesc', 'newPlanPrice'].forEach(id => document.getElementById(id).value = '');
+        loadAdminPlans();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function loadAdminPlans() {
+    try {
+        const res = await fetch(`${API}/plans/all`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const container = document.getElementById('adminPlanList');
+        if (!data.plans || data.plans.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>No plans created yet. Click "+ New Plan" above.</p></div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="docs-table" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Price</th>
+                        <th>Duration</th>
+                        <th>Devices</th>
+                        <th>Msg/Day</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.plans.map(p => `
+                        <tr>
+                            <td style="font-weight:600">${esc(p.name)}</td>
+                            <td>₹${p.price}</td>
+                            <td>${p.duration_days}d</td>
+                            <td>${p.device_limit}</td>
+                            <td>${p.message_limit}</td>
+                            <td><span class="badge ${p.is_active ? 'badge-green' : 'badge-red'}">${p.is_active ? 'Active' : 'Hidden'}</span></td>
+                            <td>
+                                <button class="btn btn-outline btn-sm" onclick="togglePlanActive(${p.id}, ${p.is_active})">${p.is_active ? '🚫 Hide' : '✅ Show'}</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function togglePlanActive(planId, currentState) {
+    try {
+        const res = await fetch(`${API}/plans/${planId}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ isActive: !currentState })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        toast(`Plan ${currentState ? 'hidden' : 'shown'}`, 'success');
+        loadAdminPlans();
     } catch (err) {
         toast(err.message, 'error');
     }

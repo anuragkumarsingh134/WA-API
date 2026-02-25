@@ -134,8 +134,25 @@ async function generateApiKey(req, res) {
         });
     } catch (err) {
         console.error('API key generation error:', err);
+    }
+}
+
+/**
+ * GET /auth/me
+ * Returns current user profile (used by Plans page to show current plan info).
+ */
+async function getMe(req, res) {
+    try {
+        const userId = req.user.id;
+        const user = dbGet('SELECT id, email, role, device_limit, message_limit, messages_sent_today, trial_expires_at, is_active, current_plan_id, plan_expires_at FROM users WHERE id = ?', [userId]);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        return res.json({ success: true, user });
+    } catch (err) {
+        console.error('Get me error:', err);
         return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 }
 
-module.exports = { register, login, generateApiKey };
+module.exports = { register, login, generateApiKey, getMe };
