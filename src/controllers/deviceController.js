@@ -15,8 +15,17 @@ async function createDevice(req, res) {
             return res.status(400).json({ success: false, error: 'deviceId is required' });
         }
 
+        // Enforce device limit
+        const user = dbGet('SELECT device_limit, role FROM users WHERE id = ?', [userId]);
+        if (user && user.role !== 'admin') {
+            const deviceCount = dbGet('SELECT COUNT(*) as count FROM devices WHERE user_id = ?', [userId]);
+            if (deviceCount.count >= user.device_limit) {
+                return res.status(403).json({ success: false, error: `Device limit reached (${user.device_limit}). Contact admin to increase.` });
+            }
+        }
+
         // Check if device already exists
-        const existing = await dbGet('SELECT id FROM devices WHERE device_id = ?', [deviceId]);
+        const existing = dbGet('SELECT id FROM devices WHERE device_id = ?', [deviceId]);
         if (existing) {
             return res.status(400).json({ success: false, error: 'Device ID already exists' });
         }

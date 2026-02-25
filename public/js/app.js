@@ -30,6 +30,15 @@ function showDashboard() {
     document.getElementById('authPage').classList.add('hidden');
     document.getElementById('dashboardPage').classList.remove('hidden');
     document.getElementById('userEmail').textContent = user?.email || '';
+
+    // Show admin nav for admin users
+    const adminNav = document.getElementById('adminNavItem');
+    if (user?.role === 'admin') {
+        adminNav.classList.remove('hidden');
+    } else {
+        adminNav.classList.add('hidden');
+    }
+
     loadDevices();
     loadApiKey();
     renderDocs();
@@ -424,7 +433,7 @@ function switchSection(section) {
     document.querySelectorAll('.main-content > section').forEach(s => s.classList.add('hidden'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
-    const sectionMap = { devices: 'sectionDevices', sendMessage: 'sectionSendMessage', apiKey: 'sectionApiKey', docs: 'sectionDocs' };
+    const sectionMap = { devices: 'sectionDevices', sendMessage: 'sectionSendMessage', apiKey: 'sectionApiKey', docs: 'sectionDocs', admin: 'sectionAdmin' };
     document.getElementById(sectionMap[section])?.classList.remove('hidden');
     document.querySelector(`.nav-item[data-section="${section}"]`)?.classList.add('active');
 
@@ -432,6 +441,7 @@ function switchSection(section) {
     if (section === 'devices') loadDevices();
     if (section === 'sendMessage') loadDevices(); // refresh selects
     if (section === 'docs') renderDocs();
+    if (section === 'admin') loadAdminUsers();
 
     // Close mobile sidebar
     document.getElementById('sidebar').classList.remove('open');
@@ -625,4 +635,140 @@ function esc(str) {
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
+}
+
+// ── Admin Panel ─────────────────────────────────────────────────
+async function loadAdminUsers() {
+    try {
+        const res = await fetch(`${API}/admin/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const container = document.getElementById('adminUserList');
+        if (!data.users || data.users.length === 0) {
+            container.innerHTML = '<div class="empty-state"><p>No users found.</p></div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="docs-table" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Devices</th>
+                        <th>Msg Today</th>
+                        <th>Trial Expires</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.users.map(u => `
+                        <tr>
+                            <td style="font-weight:600;font-size:.85rem">${esc(u.email)}</td>
+                            <td><span class="badge ${u.role === 'admin' ? 'badge-green' : 'badge-yellow'}">${u.role}</span></td>
+                            <td>${u.device_count} / ${u.device_limit}</td>
+                            <td>${u.messages_sent_today} / ${u.message_limit}</td>
+                            <td style="font-size:.8rem">${u.trial_expires_at ? new Date(u.trial_expires_at).toLocaleDateString() : '∞'}</td>
+                            <td><span class="badge ${u.is_active ? 'badge-green' : 'badge-red'}">${u.is_active ? 'Active' : 'Disabled'}</span></td>
+                            <td style="display:flex;gap:.3rem">
+                                <button class="btn btn-outline btn-sm" onclick="openEditUser(${u.id})" title="Edit">✏️</button>
+                                ${u.role !== 'admin' ? `<button class="btn btn-red btn-sm" onclick="adminDeleteUser(${u.id})" title="Delete">🗑️</button>` : ''}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function openEditUser(userId) {
+    try {
+        const res = await fetch(`${API}/admin/users/${userId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const u = data.user;
+        document.getElementById('editUserId').value = u.id;
+        document.getElementById('editUserEmail').value = u.email;
+        document.getElementById('editUserRole').value = u.role;
+        document.getElementById('editDeviceLimit').value = u.device_limit;
+        document.getElementById('editMessageLimit').value = u.message_limit;
+        document.getElementById('editIsActive').value = u.is_active ? '1' : '0';
+
+        // Format datetime-local
+        if (u.trial_expires_at) {
+            const dt = new Date(u.trial_expires_at);
+            document.getElementById('editTrialExpiry').value = dt.toISOString().slice(0, 16);
+        } else {
+            document.getElementById('editTrialExpiry').value = '';
+        }
+
+        document.getElementById('editUserModal').classList.remove('hidden');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('editUserForm')?.addEventListener('submit', handleEditUser);
+});
+
+async function handleEditUser(e) {
+    e.preventDefault();
+    const userId = document.getElementById('editUserId').value;
+
+    const body = {
+        role: document.getElementById('editUserRole').value,
+        deviceLimit: parseInt(document.getElementById('editDeviceLimit').value),
+        messageLimit: parseInt(document.getElementById('editMessageLimit').value),
+        isActive: document.getElementById('editIsActive').value === '1',
+    };
+
+    const expiryVal = document.getElementById('editTrialExpiry').value;
+    body.trialExpiresAt = expiryVal ? new Date(expiryVal).toISOString() : null;
+
+    try {
+        const res = await fetch(`${API}/admin/users/${userId}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        toast('User updated successfully', 'success');
+        closeModal('editUserModal');
+        loadAdminUsers();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function adminDeleteUser(userId) {
+    if (!confirm('Are you sure you want to delete this user and ALL their data?')) return;
+
+    try {
+        const res = await fetch(`${API}/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        toast('User deleted', 'success');
+        loadAdminUsers();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }

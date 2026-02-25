@@ -1,4 +1,28 @@
 const whatsappService = require('../services/whatsappService');
+const { dbGet, dbRun } = require('../config/db');
+
+/**
+ * Check and reset daily message counter if needed.
+ * Returns the user record with current counter.
+ */
+function checkAndResetDailyCounter(userId) {
+    const user = dbGet('SELECT messages_sent_today, message_limit, last_message_reset, role FROM users WHERE id = ?', [userId]);
+    if (!user) return null;
+
+    const today = new Date().toISOString().split('T')[0];
+    if (user.last_message_reset !== today) {
+        dbRun('UPDATE users SET messages_sent_today = 0, last_message_reset = ? WHERE id = ?', [today, userId]);
+        user.messages_sent_today = 0;
+    }
+    return user;
+}
+
+/**
+ * Increment message counter for a user.
+ */
+function incrementMessageCounter(userId) {
+    dbRun('UPDATE users SET messages_sent_today = messages_sent_today + 1 WHERE id = ?', [userId]);
+}
 
 /**
  * GET /api/messages/send-text
@@ -9,6 +33,7 @@ async function sendText(req, res) {
     try {
         const { number, message } = req.query;
         const deviceId = req.device.device_id;
+        const userId = req.apiUser.id;
 
         // Validate number
         if (!number) {
@@ -23,7 +48,16 @@ async function sendText(req, res) {
             return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Message cannot be empty' });
         }
 
+        // Enforce message limit
+        const user = checkAndResetDailyCounter(userId);
+        if (user && user.role !== 'admin' && user.messages_sent_today >= user.message_limit) {
+            return res.status(429).json({ success: false, messageId: null, status: 'failed', error: `Daily message limit reached (${user.message_limit}). Resets at midnight.` });
+        }
+
         const result = await whatsappService.sendTextMessage(deviceId, number, message);
+
+        // Increment counter on success
+        incrementMessageCounter(userId);
 
         return res.json({
             success: true,
@@ -51,6 +85,7 @@ async function sendFile(req, res) {
     try {
         const { number, url, fileName } = req.query;
         const deviceId = req.device.device_id;
+        const userId = req.apiUser.id;
 
         // Validate number
         if (!number) {
@@ -73,7 +108,16 @@ async function sendFile(req, res) {
             return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Missing fileName parameter' });
         }
 
+        // Enforce message limit
+        const user = checkAndResetDailyCounter(userId);
+        if (user && user.role !== 'admin' && user.messages_sent_today >= user.message_limit) {
+            return res.status(429).json({ success: false, messageId: null, status: 'failed', error: `Daily message limit reached (${user.message_limit}). Resets at midnight.` });
+        }
+
         const result = await whatsappService.sendFileMessage(deviceId, number, url, fileName);
+
+        // Increment counter on success
+        incrementMessageCounter(userId);
 
         return res.json({
             success: true,

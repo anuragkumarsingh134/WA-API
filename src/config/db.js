@@ -8,6 +8,7 @@ let db;
 
 /**
  * Initialize the SQLite database and create tables if they don't exist.
+ * Runs safe ALTER TABLE migrations for new columns.
  */
 function initializeDatabase() {
   const dataDir = path.dirname(DB_PATH);
@@ -27,6 +28,13 @@ function initializeDatabase() {
       email VARCHAR(150) UNIQUE NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
       api_key VARCHAR(64) UNIQUE,
+      role TEXT DEFAULT 'user',
+      device_limit INTEGER DEFAULT 3,
+      message_limit INTEGER DEFAULT 100,
+      messages_sent_today INTEGER DEFAULT 0,
+      last_message_reset DATE,
+      trial_expires_at DATETIME,
+      is_active INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -54,6 +62,27 @@ function initializeDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // ── Safe migrations for existing databases ───────────────
+  const migrations = [
+    { column: 'role', sql: "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'" },
+    { column: 'device_limit', sql: 'ALTER TABLE users ADD COLUMN device_limit INTEGER DEFAULT 3' },
+    { column: 'message_limit', sql: 'ALTER TABLE users ADD COLUMN message_limit INTEGER DEFAULT 100' },
+    { column: 'messages_sent_today', sql: 'ALTER TABLE users ADD COLUMN messages_sent_today INTEGER DEFAULT 0' },
+    { column: 'last_message_reset', sql: 'ALTER TABLE users ADD COLUMN last_message_reset DATE' },
+    { column: 'trial_expires_at', sql: 'ALTER TABLE users ADD COLUMN trial_expires_at DATETIME' },
+    { column: 'is_active', sql: 'ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1' },
+  ];
+
+  const tableInfo = db.prepare('PRAGMA table_info(users)').all();
+  const existingCols = new Set(tableInfo.map(c => c.name));
+
+  for (const m of migrations) {
+    if (!existingCols.has(m.column)) {
+      db.exec(m.sql);
+      console.log(`  Migration: added column "${m.column}" to users table`);
+    }
+  }
 
   console.log('Database tables initialized.');
   console.log('Database ready.');

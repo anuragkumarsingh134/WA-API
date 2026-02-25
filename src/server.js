@@ -10,6 +10,7 @@ const { restoreAllSessions } = require('./services/whatsappService');
 const authRoutes = require('./routes/authRoutes');
 const deviceRoutes = require('./routes/deviceRoutes');
 const messageRoutes = require('./routes/messageRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,6 +35,7 @@ app.use(limiter);
 app.use('/auth', authRoutes);
 app.use('/device', deviceRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/admin', adminRoutes);
 
 // Health check
 app.get('/', (req, res) => {
