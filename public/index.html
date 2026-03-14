@@ -8,7 +8,7 @@
     <meta name="description"
         content="WhatsApp Multi-Session API Dashboard — Manage devices, send messages, and control your sessions.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 
@@ -70,9 +70,12 @@
 
         <!-- Mobile Header -->
         <div class="mobile-header">
-            <button onclick="toggleSidebar()">☰</button>
-            <span style="font-weight:600">WhatsApp API</span>
+            <button onclick="toggleSidebar()" aria-label="Open menu">&#9776;</button>
+            <span>WhatsApp API</span>
         </div>
+
+        <!-- Sidebar Overlay (mobile) -->
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
         <div class="app-shell">
             <!-- Sidebar -->
@@ -88,11 +91,8 @@
                     <a class="nav-item" onclick="switchSection('sendMessage')" data-section="sendMessage">
                         <span class="nav-icon">✉️</span> Send Message
                     </a>
-                    <a class="nav-item" onclick="switchSection('apiKey')" data-section="apiKey">
-                        <span class="nav-icon">🔑</span> API Key
-                    </a>
                     <a class="nav-item" onclick="switchSection('docs')" data-section="docs">
-                        <span class="nav-icon">📖</span> API Docs
+                        <span class="nav-icon">📖</span> API / Docs
                     </a>
                     <a class="nav-item" onclick="switchSection('plans')" data-section="plans">
                         <span class="nav-icon">💎</span> Plans
@@ -189,18 +189,47 @@
                             <button type="submit" class="btn btn-primary">Send PDF</button>
                         </form>
                     </div>
+
+                    <!-- Image Message -->
+                    <div class="card mt-2">
+                        <div class="card-header">
+                            <h3>🖼️ Send Image</h3>
+                        </div>
+                        <form id="sendImageForm">
+                            <div class="form-group">
+                                <label>Device ID</label>
+                                <select class="form-input" id="imgDeviceId" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Phone Number (digits only)</label>
+                                <input class="form-input" id="imgNumber" placeholder="919704107158" required
+                                    pattern="[0-9]+">
+                            </div>
+                            <div class="form-group">
+                                <label>Image URL (HTTPS)</label>
+                                <input class="form-input" id="imgUrl" type="url"
+                                    placeholder="https://example.com/image.jpg" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Caption (Optional)</label>
+                                <input class="form-input" id="imgCaption" placeholder="Check out this image!">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Send Image</button>
+                        </form>
+                    </div>
                 </section>
 
-                <!-- ── API Key Section ────────────────────────────── -->
-                <section id="sectionApiKey" class="hidden">
+                <!-- ── API Docs & API Key Section ─────────────────────────── -->
+                <section id="sectionDocs" class="hidden">
                     <div class="section-header">
-                        <h2>API Key</h2>
-                        <p>Your key for sending messages via the API</p>
+                        <h2>API & Documentation</h2>
+                        <p>Manage your API key and integrate endpoints with live examples</p>
                     </div>
 
-                    <div class="card">
+                    <!-- API Key Settings -->
+                    <div class="card mb-2">
                         <div class="card-header">
-                            <h3>🔑 Current API Key</h3>
+                            <h3>🔑 API Key Management</h3>
                         </div>
                         <div id="apiKeyContainer">
                             <p class="text-gray text-sm">No API key generated yet.</p>
@@ -208,8 +237,8 @@
                         <button class="btn btn-primary btn-sm mt-2" onclick="generateApiKey()">Generate New Key</button>
 
                         <div class="mt-3">
-                            <h3 style="font-size:.9rem;font-weight:700;color:var(--navy);margin-bottom:.5rem">Usage
-                                Example</h3>
+                            <h3 style="font-size:.9rem;font-weight:700;color:var(--navy);margin-bottom:.5rem">Quick
+                                Usage</h3>
                             <div
                                 style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-sm);padding:.75rem;font-family:'Consolas',monospace;font-size:.78rem;word-break:break-all;color:var(--navy-light)">
                                 GET /api/messages/send-text?deviceId=<span
@@ -219,28 +248,16 @@
                             </div>
                         </div>
                     </div>
-                </section>
-
-                <!-- ── API Docs Section ─────────────────────────── -->
-                <section id="sectionDocs" class="hidden">
-                    <div class="section-header">
-                        <h2>API Documentation</h2>
-                        <p>Complete endpoint reference with live examples</p>
-                    </div>
 
                     <!-- Server Info -->
                     <div class="card mb-2">
                         <div class="card-header">
-                            <h3>🌐 Server Info</h3>
+                            <h3>🌐 Server Details</h3>
                         </div>
                         <div class="docs-info-grid">
                             <div class="docs-info-item">
                                 <span class="docs-label">Base URL</span>
                                 <code class="docs-value" id="docsBaseUrl">—</code>
-                            </div>
-                            <div class="docs-info-item">
-                                <span class="docs-label">API Key</span>
-                                <code class="docs-value docs-key" id="docsApiKey">Not generated</code>
                             </div>
                         </div>
                     </div>
@@ -337,17 +354,7 @@
                         </div>
                     </div>
 
-                    <!-- Payment History -->
-                    <div class="card mt-2">
-                        <div class="card-header">
-                            <h3>📜 Payment History</h3>
-                        </div>
-                        <div id="paymentHistory">
-                            <div class="empty-state">
-                                <p>No payments yet.</p>
-                            </div>
-                        </div>
-                    </div>
+
                 </section>
 
                 <!-- ── Admin Section ───────────────────────────── -->
@@ -425,6 +432,9 @@
                             </div>
                         </div>
                     </div>
+
+
+
                 </section>
 
             </main>
@@ -511,7 +521,65 @@
         </div>
     </div>
 
-    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+    <!-- ── Edit Plan Modal ────────────────────────────────────── -->
+    <div id="editPlanModal" class="modal-overlay hidden">
+        <div class="modal">
+            <h3>Edit Plan</h3>
+            <form id="editPlanForm">
+                <input type="hidden" id="editPlanId">
+                <div class="form-group">
+                    <label>Plan Name</label>
+                    <input class="form-input" id="editPlanName" required>
+                </div>
+                <div class="form-group">
+                    <label>Price</label>
+                    <input class="form-input" type="number" id="editPlanPrice" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Duration (Days)</label>
+                    <input class="form-input" type="number" id="editPlanDuration" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Device Limit</label>
+                    <input class="form-input" type="number" id="editPlanDevices" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Message Limit/Day</label>
+                    <input class="form-input" type="number" id="editPlanMessages" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input class="form-input" id="editPlanDesc">
+                </div>
+                <div class="form-group">
+                    <label>Active</label>
+                    <select class="form-input" id="editPlanIsActive">
+                        <option value="1">Active</option>
+                        <option value="0">Disabled</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('editPlanModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Contact Admin Modal -->
+    <div id="contactAdminModal" class="modal-overlay hidden">
+        <div class="modal" style="text-align:center;max-width:420px">
+            <div style="font-size:3rem;margin-bottom:.75rem">📞</div>
+            <h3 style="margin-bottom:.5rem">Contact Administrator</h3>
+            <p style="color:var(--gray-500);margin-bottom:1.25rem">To purchase a plan, please contact the administrator
+                directly.</p>
+            <a href="tel:9603761820" class="btn btn-primary btn-block"
+                style="text-decoration:none;display:block;margin-bottom:.75rem">📱 Call: +91 9603761820</a>
+            <a href="https://wa.me/919603761820" target="_blank" class="btn btn-green btn-block"
+                style="text-decoration:none;display:block;margin-bottom:.75rem">💬 WhatsApp: 9603761820</a>
+            <button class="btn btn-outline btn-block" onclick="closeModal('contactAdminModal')">Close</button>
+        </div>
+    </div>
     <script src="/js/app.js"></script>
 </body>
 

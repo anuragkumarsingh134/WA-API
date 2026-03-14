@@ -4,11 +4,27 @@ const { dbGet, dbRun, dbAll } = require('../config/db');
 
 const CF_API_VERSION = '2023-08-01';
 
-function getCashfreeConfig() {
-    const env = process.env.CASHFREE_ENV || 'sandbox';
+async function getCashfreeConfig() {
+    let env = process.env.CASHFREE_ENV || 'sandbox';
+    let appId = process.env.CASHFREE_APP_ID;
+    let secretKey = process.env.CASHFREE_SECRET_KEY;
+
+    try {
+        const settings = dbAll(`SELECT * FROM settings WHERE setting_key LIKE 'cashfree_%'`);
+        const conf = {};
+        settings.forEach(s => { conf[s.setting_key] = s.setting_value; });
+
+        if (conf['cashfree_env']) env = conf['cashfree_env'];
+        if (conf['cashfree_app_id']) appId = conf['cashfree_app_id'];
+        if (conf['cashfree_secret_key']) secretKey = conf['cashfree_secret_key'];
+    } catch (e) {
+        console.error('Failed to load DB cashfree config', e);
+    }
+
     return {
-        appId: process.env.CASHFREE_APP_ID,
-        secretKey: process.env.CASHFREE_SECRET_KEY,
+        appId: appId,
+        secretKey: secretKey,
+        env: env,
         baseUrl: env === 'production'
             ? 'https://api.cashfree.com/pg'
             : 'https://sandbox.cashfree.com/pg',
@@ -39,7 +55,7 @@ async function createOrder(req, res) {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
-        const cf = getCashfreeConfig();
+        const cf = await getCashfreeConfig();
         if (!cf.appId || !cf.secretKey) {
             return res.status(500).json({ success: false, error: 'Cashfree credentials not configured' });
         }
@@ -81,7 +97,7 @@ async function createOrder(req, res) {
             orderId,
             paymentSessionId: cfOrder.payment_session_id,
             cfOrderId: cfOrder.cf_order_id,
-            environment: process.env.CASHFREE_ENV || 'sandbox',
+            environment: cf.env,
         });
     } catch (err) {
         console.error('Create order error:', err.response?.data || err.message);
@@ -96,7 +112,7 @@ async function createOrder(req, res) {
  */
 async function handleWebhook(req, res) {
     try {
-        const cf = getCashfreeConfig();
+        const cf = await getCashfreeConfig();
 
         // Verify webhook signature
         const timestamp = req.headers['x-cashfree-timestamp'];
@@ -168,7 +184,7 @@ async function verifyPayment(req, res) {
         }
 
         // Check with Cashfree
-        const cf = getCashfreeConfig();
+        const cf = await getCashfreeConfig();
         const cfResponse = await axios.get(`${cf.baseUrl}/orders/${orderId}`, {
             headers: {
                 'x-client-id': cf.appId,

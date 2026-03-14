@@ -189,6 +189,55 @@ async function sendFileMessage(deviceId, number, url, fileName) {
 }
 
 /**
+ * Send an image file via a connected device.
+ */
+async function sendImageMessage(deviceId, number, url, caption) {
+    const socket = sessionManager.getSession(deviceId);
+    if (!socket) {
+        throw new Error('Session not found or not connected');
+    }
+
+    // Validate HTTPS
+    if (!url.startsWith('https://')) {
+        throw new Error('Image URL must use HTTPS');
+    }
+
+    // Download the file
+    const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        maxContentLength: MAX_FILE_SIZE,
+        timeout: 30000,
+        headers: { 'User-Agent': 'WhatsApp-API/1.0' },
+    });
+
+    // Validate content type
+    const contentType = response.headers['content-type'] || '';
+    if (!contentType.startsWith('image/')) {
+        throw new Error(`Invalid content type: ${contentType}. Only image files are supported.`);
+    }
+
+    // Validate file size
+    const fileBuffer = Buffer.from(response.data);
+    if (fileBuffer.length > MAX_FILE_SIZE) {
+        throw new Error(`File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`);
+    }
+
+    const jid = formatJID(number);
+    const result = await socket.sendMessage(jid, {
+        image: fileBuffer,
+        caption: caption || '',
+    });
+
+    // Log to database
+    await dbRun(
+        'INSERT INTO messages (device_id, recipient, message_type, status, message_id) VALUES (?, ?, ?, ?, ?)',
+        [deviceId, number, 'image', 'sent', result.key.id]
+    );
+
+    return { messageId: result.key.id, status: 'sent' };
+}
+
+/**
  * Restore all previously connected sessions on server startup.
  */
 async function restoreAllSessions() {
@@ -254,6 +303,7 @@ module.exports = {
     getProfilePicture,
     sendTextMessage,
     sendFileMessage,
+    sendImageMessage,
     restoreAllSessions,
     deleteSession,
 };

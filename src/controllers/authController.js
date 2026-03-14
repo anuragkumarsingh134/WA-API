@@ -81,10 +81,6 @@ async function login(req, res) {
             return res.status(403).json({ success: false, error: 'Account has been disabled. Contact admin.' });
         }
 
-        // Check trial expiry (admin has null trial_expires_at = unlimited)
-        if (user.trial_expires_at && new Date(user.trial_expires_at) < new Date()) {
-            return res.status(403).json({ success: false, error: 'Trial period has expired. Contact admin to extend.' });
-        }
 
         const valid = await bcrypt.compare(password, user.password_hash);
         if (!valid) {

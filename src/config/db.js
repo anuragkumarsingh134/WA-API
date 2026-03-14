@@ -56,7 +56,7 @@ function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       device_id VARCHAR(50),
       recipient VARCHAR(20),
-      message_type TEXT CHECK(message_type IN ('text','file')),
+      message_type TEXT CHECK(message_type IN ('text','file','image')),
       status VARCHAR(50),
       message_id VARCHAR(100),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -115,6 +115,14 @@ function initializeDatabase() {
       console.log(`  Migration: added column "${m.column}" to users table`);
     }
   }
+
+  // Create settings table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      setting_key VARCHAR(100) PRIMARY KEY,
+      setting_value TEXT
+    )
+  `);
 
   console.log('Database tables initialized.');
   console.log('Database ready.');

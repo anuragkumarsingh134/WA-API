@@ -5,6 +5,23 @@ let token = localStorage.getItem('wa_token');
 let user = JSON.parse(localStorage.getItem('wa_user') || 'null');
 let qrInterval = null;
 
+// ── Trial Expiry Helpers ─────────────────────────────────────
+function showTrialExpiredPopup() {
+    document.getElementById('contactAdminModal').classList.remove('hidden');
+}
+
+/**
+ * Pass a parsed response body. If it is a TRIAL_EXPIRED error,
+ * show the contact-admin popup and return true (caller should stop).
+ */
+function checkTrialExpired(data) {
+    if (!data.success && data.error === 'TRIAL_EXPIRED') {
+        showTrialExpiredPopup();
+        return true;
+    }
+    return false;
+}
+
 // ── Init ────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     if (token && user) {
@@ -18,7 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('createDeviceForm').addEventListener('submit', handleCreateDevice);
     document.getElementById('sendTextForm').addEventListener('submit', handleSendText);
     document.getElementById('sendFileForm').addEventListener('submit', handleSendFile);
+    document.getElementById('sendImageForm').addEventListener('submit', handleSendImage);
 });
+
 
 // ── Auth ────────────────────────────────────────────────────
 function showAuth() {
@@ -29,19 +48,47 @@ function showAuth() {
 function showDashboard() {
     document.getElementById('authPage').classList.add('hidden');
     document.getElementById('dashboardPage').classList.remove('hidden');
-    document.getElementById('userEmail').textContent = user?.email || '';
 
-    // Show admin nav for admin users
-    const adminNav = document.getElementById('adminNavItem');
+    // Show admin nav item only for admins
     if (user?.role === 'admin') {
-        adminNav.classList.remove('hidden');
-    } else {
-        adminNav.classList.add('hidden');
+        document.getElementById('adminNavItem').classList.remove('hidden');
     }
 
+    // Show trial-expired banner for non-admin users with expired trial and no active plan
+    if (user && user.role !== 'admin') {
+        const trialExpired = user.trialExpiresAt && new Date(user.trialExpiresAt) < new Date();
+        if (trialExpired) {
+            showTrialBanner();
+        }
+    }
+
+    document.getElementById('userEmail').textContent = user?.email || '';
     loadDevices();
     loadApiKey();
-    renderDocs();
+}
+
+function showTrialBanner() {
+    // Only add banner once
+    if (document.getElementById('trialExpiredBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'trialExpiredBanner';
+    banner.style.cssText = 'background:#ef4444;color:#fff;text-align:center;padding:.6rem 1rem;font-size:.85rem;font-weight:600;position:sticky;top:0;z-index:100;';
+    banner.innerHTML = '⚠️ Your trial has expired. <a onclick="showTrialExpiredPopup()" style="color:#fff;text-decoration:underline;cursor:pointer;">Contact administrator</a> to activate a plan.';
+    document.querySelector('.main-content').prepend(banner);
+}
+
+
+// ── Sidebar (Mobile) ─────────────────────────────────────────
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('visible');
+}
+
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('visible');
 }
 
 function showLogin() {
@@ -163,6 +210,7 @@ function populateDeviceSelects(devices) {
 
     document.getElementById('txtDeviceId').innerHTML = options;
     document.getElementById('fileDeviceId').innerHTML = options;
+    document.getElementById('imgDeviceId').innerHTML = options;
 }
 
 function statusBadge(status) {
@@ -275,6 +323,14 @@ async function handleCreateDevice(e) {
             body: JSON.stringify({ deviceId, sessionName })
         });
         const data = await res.json();
+
+        // Trial expired — close device modal and show contact admin popup
+        if (!data.success && data.error === 'TRIAL_EXPIRED') {
+            closeModal('createDeviceModal');
+            document.getElementById('contactAdminModal').classList.remove('hidden');
+            return;
+        }
+
         if (!data.success) throw new Error(data.error);
 
         toast('Device created! Scan QR to connect.', 'success');
@@ -389,6 +445,35 @@ async function handleSendFile(e) {
     }
 }
 
+async function handleSendImage(e) {
+    e.preventDefault();
+    const deviceId = document.getElementById('imgDeviceId').value;
+    const number = document.getElementById('imgNumber').value;
+    const url = document.getElementById('imgUrl').value;
+    const caption = document.getElementById('imgCaption').value;
+
+    if (!user?.apiKey) {
+        toast('Generate an API key first (API Key section)', 'error');
+        return;
+    }
+
+    try {
+        const params = new URLSearchParams({ deviceId, apiKey: user.apiKey, number, url });
+        if (caption) params.append('caption', caption);
+
+        const res = await fetch(`${API}/api/messages/send-image?${params}`);
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        toast(`Image sent! ID: ${data.messageId}`, 'success');
+        document.getElementById('imgUrl').value = '';
+        document.getElementById('imgCaption').value = '';
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
 // ── API Key ─────────────────────────────────────────────────
 function loadApiKey() {
     const container = document.getElementById('apiKeyContainer');
@@ -441,16 +526,14 @@ function switchSection(section) {
     if (section === 'devices') loadDevices();
     if (section === 'sendMessage') loadDevices(); // refresh selects
     if (section === 'docs') renderDocs();
-    if (section === 'plans') { loadPlans(); loadPaymentHistory(); }
+    if (section === 'plans') { loadPlans(); }
     if (section === 'admin') { loadAdminUsers(); loadAdminPlans(); }
 
-    // Close mobile sidebar
-    document.getElementById('sidebar').classList.remove('open');
+    // Close mobile sidebar and overlay
+    closeSidebar();
 }
 
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-}
+
 
 // ── API Docs Renderer ───────────────────────────────────────
 function renderDocs() {
@@ -460,8 +543,10 @@ function renderDocs() {
 
     document.getElementById('docsBaseUrl').textContent = base;
     const docsKeyEl = document.getElementById('docsApiKey');
-    docsKeyEl.textContent = keyShort;
-    docsKeyEl.title = key;
+    if (docsKeyEl) {
+        docsKeyEl.textContent = keyShort;
+        docsKeyEl.title = key;
+    }
 
     // ── Auth endpoints
     document.getElementById('docsAuthEndpoints').innerHTML = [
@@ -568,6 +653,21 @@ function renderDocs() {
             example: `${base}/api/messages/send-file?deviceId=918919007019&apiKey=${key}&number=919704107158&url=https://pdf.domain.com/file.pdf&fileName=file.pdf`,
             exampleLabel: 'full url',
             response: `{\n  "success": true,\n  "messageId": "XYZ98765",\n  "status": "sent",\n  "error": null\n}`
+        },
+        {
+            method: 'GET', path: '/api/messages/send-image',
+            desc: 'Send an image via HTTPS URL',
+            params: [
+                { n: 'deviceId', r: true, q: true },
+                { n: 'apiKey', r: true, q: true },
+                { n: 'number', r: true, q: true },
+                { n: 'url', r: true, q: true },
+                { n: 'caption', r: false, q: true }
+            ],
+            bodyType: 'none',
+            example: `${base}/api/messages/send-image?deviceId=918919007019&apiKey=${key}&number=919704107158&url=https://domain.com/img.jpg&caption=Hello`,
+            exampleLabel: 'full url',
+            response: `{\n  "success": true,\n  "messageId": "IMG12345",\n  "status": "sent",\n  "error": null\n}`
         }
     ].map(renderEndpoint).join('');
 }
@@ -836,69 +936,8 @@ async function loadPlans() {
     }
 }
 
-async function buyPlan(planId) {
-    try {
-        toast('Creating payment order...', 'info');
-        const res = await fetch(`${API}/payment/create-order`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ planId })
-        });
-        const data = await res.json();
-        if (!data.success) throw new Error(data.error);
-
-        // Init Cashfree checkout
-        const cashfree = Cashfree({ mode: data.environment === 'production' ? 'production' : 'sandbox' });
-        await cashfree.checkout({
-            paymentSessionId: data.paymentSessionId,
-            redirectTarget: '_self',
-        });
-    } catch (err) {
-        toast(err.message, 'error');
-    }
-}
-
-async function loadPaymentHistory() {
-    try {
-        const res = await fetch(`${API}/payment/history`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (!data.success) throw new Error(data.error);
-
-        const container = document.getElementById('paymentHistory');
-        if (!data.orders || data.orders.length === 0) {
-            container.innerHTML = '<div class="empty-state"><p>No payments yet.</p></div>';
-            return;
-        }
-
-        container.innerHTML = `
-            <table class="docs-table" style="width:100%">
-                <thead>
-                    <tr>
-                        <th>Plan</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                        <th>Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${data.orders.map(o => `
-                        <tr>
-                            <td style="font-weight:600">${esc(o.plan_name)}</td>
-                            <td>₹${o.amount}</td>
-                            <td><span class="badge ${o.status === 'paid' ? 'badge-green' : o.status === 'pending' ? 'badge-yellow' : 'badge-red'}">${o.status}</span></td>
-                            <td style="font-size:.8rem">${new Date(o.created_at).toLocaleDateString()}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>`;
-    } catch (err) {
-        toast(err.message, 'error');
-    }
+function buyPlan(planId) {
+    document.getElementById('contactAdminModal').classList.remove('hidden');
 }
 
 // ── Admin Plans ─────────────────────────────────────────────
@@ -976,7 +1015,10 @@ async function loadAdminPlans() {
                             <td>${p.message_limit}</td>
                             <td><span class="badge ${p.is_active ? 'badge-green' : 'badge-red'}">${p.is_active ? 'Active' : 'Hidden'}</span></td>
                             <td>
-                                <button class="btn btn-outline btn-sm" onclick="togglePlanActive(${p.id}, ${p.is_active})">${p.is_active ? '🚫 Hide' : '✅ Show'}</button>
+                                <div style="display:flex;gap:.25rem">
+                                    <button class="btn btn-outline btn-sm" onclick="openEditPlanModal(${p.id})">✏️ Edit</button>
+                                    <button class="btn btn-outline btn-sm" onclick="togglePlanActive(${p.id}, ${p.is_active})">${p.is_active ? '🚫 Hide' : '✅ Show'}</button>
+                                </div>
                             </td>
                         </tr>
                     `).join('')}
@@ -1006,3 +1048,5 @@ async function togglePlanActive(planId, currentState) {
         toast(err.message, 'error');
     }
 }
+
+

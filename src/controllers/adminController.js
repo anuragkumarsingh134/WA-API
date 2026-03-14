@@ -147,4 +147,45 @@ async function resetMessageCounter(req, res) {
     }
 }
 
-module.exports = { listUsers, getUser, updateUser, deleteUser, resetMessageCounter };
+/**
+ * GET /admin/settings
+ * Retrieve app settings.
+ */
+async function getSettings(req, res) {
+    try {
+        const settings = dbAll(`SELECT * FROM settings WHERE setting_key LIKE 'cashfree_%'`);
+        const conf = {};
+        settings.forEach(s => { conf[s.setting_key] = s.setting_value; });
+
+        return res.json({ success: true, settings: conf });
+    } catch (err) {
+        console.error('Get settings error:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+}
+
+/**
+ * PUT /admin/settings
+ * Update app settings.
+ */
+async function updateSettings(req, res) {
+    try {
+        const { settings } = req.body;
+        if (!settings || typeof settings !== 'object') {
+            return res.status(400).json({ success: false, error: 'Invalid settings' });
+        }
+
+        // Upsert settings
+        for (const [key, value] of Object.entries(settings)) {
+            // Using INSERT OR REPLACE (SQLite)
+            dbRun(`INSERT OR REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)`, [key, String(value)]);
+        }
+
+        return res.json({ success: true, message: 'Settings updated successfully' });
+    } catch (err) {
+        console.error('Update settings error:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+}
+
+module.exports = { listUsers, getUser, updateUser, deleteUser, resetMessageCounter, getSettings, updateSettings };

@@ -3,7 +3,8 @@ const { dbGet } = require('../config/db');
 /**
  * API Key middleware for message endpoints.
  * Reads `apiKey` and `deviceId` from query string.
- * Validates the key exists, and that the device belongs to the key's user.
+ * Validates the key exists, that the device belongs to the key's user,
+ * and that the user's trial/plan has not expired.
  * Sets req.apiUser and req.device on success.
  */
 async function apiKeyMiddleware(req, res, next) {
@@ -18,10 +19,29 @@ async function apiKeyMiddleware(req, res, next) {
             return res.status(400).json({ success: false, error: 'Missing deviceId parameter' });
         }
 
-        // Look up user by API key
-        const user = await dbGet('SELECT id, email FROM users WHERE api_key = ?', [apiKey]);
+        // Look up user by API key (include trial/plan fields)
+        const user = await dbGet(
+            'SELECT id, email, role, trial_expires_at, plan_expires_at, current_plan_id FROM users WHERE api_key = ?',
+            [apiKey]
+        );
         if (!user) {
             return res.status(401).json({ success: false, error: 'Invalid API key' });
+        }
+
+        // Check trial/plan expiry (admins are exempt)
+        if (user.role !== 'admin') {
+            const now = new Date();
+            const trialExpired = user.trial_expires_at && new Date(user.trial_expires_at) < now;
+            const planActive = user.current_plan_id &&
+                (!user.plan_expires_at || new Date(user.plan_expires_at) >= now);
+
+            if (trialExpired && !planActive) {
+                return res.status(402).json({
+                    success: false,
+                    error: 'TRIAL_EXPIRED',
+                    message: 'Trial has expired. Please contact the administrator to activate a plan.',
+                });
+            }
         }
 
         // Look up device and verify ownership

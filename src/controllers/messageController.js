@@ -136,4 +136,59 @@ async function sendFile(req, res) {
     }
 }
 
-module.exports = { sendText, sendFile };
+/**
+ * GET /api/messages/send-image
+ * Query params: deviceId, apiKey, number, url, caption
+ * apiKeyMiddleware already validates apiKey, deviceId, and device ownership.
+ */
+async function sendImage(req, res) {
+    try {
+        const { number, url, caption } = req.query;
+        const deviceId = req.device.device_id;
+        const userId = req.apiUser.id;
+
+        // Validate number
+        if (!number) {
+            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Missing number parameter' });
+        }
+        if (!/^\d+$/.test(number)) {
+            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Number must contain digits only (no + or spaces)' });
+        }
+
+        // Validate URL
+        if (!url) {
+            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Missing url parameter' });
+        }
+        if (!url.startsWith('https://')) {
+            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Image URL must use HTTPS' });
+        }
+
+        // Enforce message limit
+        const user = checkAndResetDailyCounter(userId);
+        if (user && user.role !== 'admin' && user.messages_sent_today >= user.message_limit) {
+            return res.status(429).json({ success: false, messageId: null, status: 'failed', error: `Daily message limit reached (${user.message_limit}). Resets at midnight.` });
+        }
+
+        const result = await whatsappService.sendImageMessage(deviceId, number, url, caption);
+
+        // Increment counter on success
+        incrementMessageCounter(userId);
+
+        return res.json({
+            success: true,
+            messageId: result.messageId,
+            status: result.status,
+            error: null,
+        });
+    } catch (err) {
+        console.error('Send image error:', err);
+        return res.status(500).json({
+            success: false,
+            messageId: null,
+            status: 'failed',
+            error: err.message || 'Internal server error',
+        });
+    }
+}
+
+module.exports = { sendText, sendFile, sendImage };
