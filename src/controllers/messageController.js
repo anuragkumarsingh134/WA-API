@@ -39,8 +39,8 @@ async function sendText(req, res) {
         if (!number) {
             return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Missing number parameter' });
         }
-        if (!/^\d+$/.test(number)) {
-            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Number must contain digits only (no + or spaces)' });
+        if (!/^[a-zA-Z0-9\-@.]+$/.test(number)) {
+            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Number must contain digits, or be a valid Group ID (e.g. 123-456@g.us)' });
         }
 
         // Validate message
@@ -91,8 +91,8 @@ async function sendFile(req, res) {
         if (!number) {
             return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Missing number parameter' });
         }
-        if (!/^\d+$/.test(number)) {
-            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Number must contain digits only (no + or spaces)' });
+        if (!/^[a-zA-Z0-9\-@.]+$/.test(number)) {
+            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Number must contain digits, or be a valid Group ID (e.g. 123-456@g.us)' });
         }
 
         // Validate URL
@@ -151,8 +151,8 @@ async function sendImage(req, res) {
         if (!number) {
             return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Missing number parameter' });
         }
-        if (!/^\d+$/.test(number)) {
-            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Number must contain digits only (no + or spaces)' });
+        if (!/^[a-zA-Z0-9\-@.]+$/.test(number)) {
+            return res.status(400).json({ success: false, messageId: null, status: 'failed', error: 'Number must contain digits, or be a valid Group ID (e.g. 123-456@g.us)' });
         }
 
         // Validate URL
@@ -191,4 +191,28 @@ async function sendImage(req, res) {
     }
 }
 
-module.exports = { sendText, sendFile, sendImage };
+/**
+ * GET /api/messages/groups
+ * Query params: deviceId, apiKey
+ */
+async function getGroups(req, res) {
+    try {
+        const deviceId = req.device.device_id;
+        const groups = await whatsappService.getGroups(deviceId);
+        
+        return res.json({
+            success: true,
+            groups,
+            error: null,
+        });
+    } catch (err) {
+        console.error('Get groups error:', err);
+        return res.status(500).json({
+            success: false,
+            groups: null,
+            error: err.message || 'Internal server error',
+        });
+    }
+}
+
+module.exports = { sendText, sendFile, sendImage, getGroups };

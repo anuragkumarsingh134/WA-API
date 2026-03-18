@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sendTextForm').addEventListener('submit', handleSendText);
     document.getElementById('sendFileForm').addEventListener('submit', handleSendFile);
     document.getElementById('sendImageForm').addEventListener('submit', handleSendImage);
+    document.getElementById('fetchGroupsForm').addEventListener('submit', handleFetchGroups);
 });
 
 
@@ -211,6 +212,7 @@ function populateDeviceSelects(devices) {
     document.getElementById('txtDeviceId').innerHTML = options;
     document.getElementById('fileDeviceId').innerHTML = options;
     document.getElementById('imgDeviceId').innerHTML = options;
+    document.getElementById('groupsDeviceId').innerHTML = options;
 }
 
 function statusBadge(status) {
@@ -474,6 +476,64 @@ async function handleSendImage(e) {
     }
 }
 
+// ── Fetch Groups ────────────────────────────────────────────
+async function handleFetchGroups(e) {
+    e.preventDefault();
+    const deviceId = document.getElementById('groupsDeviceId').value;
+    const container = document.getElementById('groupsList');
+
+    if (!user?.apiKey) {
+        toast('Generate an API key first (API / Docs section)', 'error');
+        return;
+    }
+
+    container.innerHTML = '<p class="text-gray" style="padding:.5rem">Loading groups...</p>';
+
+    try {
+        const params = new URLSearchParams({ deviceId, apiKey: user.apiKey });
+        const res = await fetch(`${API}/api/messages/groups?${params}`);
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        if (!data.groups || data.groups.length === 0) {
+            container.innerHTML = '<div class="empty-state" style="padding:1rem"><p>No groups found for this device.</p></div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="docs-table" style="width:100%;font-size:.85rem">
+                <thead>
+                    <tr>
+                        <th>Group Name</th>
+                        <th>Group ID</th>
+                        <th>Members</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.groups.map(g => `
+                        <tr>
+                            <td style="font-weight:600">${esc(g.subject || 'Unnamed')}</td>
+                            <td style="font-family:Consolas,monospace;font-size:.8rem">${esc(g.id)}</td>
+                            <td>${g.participantsCount}</td>
+                            <td><button class="btn btn-outline btn-sm" onclick="copyGroupId('${esc(g.id)}')" title="Copy ID">📋</button></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>`;
+
+        toast(`Found ${data.groups.length} group(s)`, 'success');
+    } catch (err) {
+        container.innerHTML = `<p class="text-red" style="padding:.5rem">${esc(err.message)}</p>`;
+        toast(err.message, 'error');
+    }
+}
+
+function copyGroupId(id) {
+    navigator.clipboard.writeText(id).then(() => toast('Group ID copied!', 'info'));
+}
+
 // ── API Key ─────────────────────────────────────────────────
 function loadApiKey() {
     const container = document.getElementById('apiKeyContainer');
@@ -670,6 +730,21 @@ function renderDocs() {
             response: `{\n  "success": true,\n  "messageId": "IMG12345",\n  "status": "sent",\n  "error": null\n}`
         }
     ].map(renderEndpoint).join('');
+
+    // ── Groups endpoint
+    const groupsHtml = renderEndpoint({
+        method: 'GET', path: '/api/messages/groups',
+        desc: 'Fetch all WhatsApp groups the device is participating in. Use the returned Group IDs to send messages to groups.',
+        params: [
+            { n: 'deviceId', r: true, q: true },
+            { n: 'apiKey', r: true, q: true }
+        ],
+        bodyType: 'none',
+        example: `${base}/api/messages/groups?deviceId=918919007019&apiKey=${key}`,
+        exampleLabel: 'full url',
+        response: `{\n  "success": true,\n  "groups": [\n    { "id": "120363XXXXX@g.us", "subject": "My Group", "participantsCount": 15 }\n  ],\n  "error": null\n}`
+    });
+    document.getElementById('docsMessageEndpoints').innerHTML += groupsHtml;
 }
 
 function renderEndpoint(ep) {

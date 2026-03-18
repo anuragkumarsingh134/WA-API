@@ -149,9 +149,8 @@
                                 <select class="form-input" id="txtDeviceId" required></select>
                             </div>
                             <div class="form-group">
-                                <label>Phone Number (digits only)</label>
-                                <input class="form-input" id="txtNumber" placeholder="919704107158" required
-                                    pattern="[0-9]+">
+                                <label>Phone Number or Group ID</label>
+                                <input class="form-input" id="txtNumber" placeholder="919704107158 or 123-456@g.us" required>
                             </div>
                             <div class="form-group">
                                 <label>Message</label>
@@ -173,9 +172,8 @@
                                 <select class="form-input" id="fileDeviceId" required></select>
                             </div>
                             <div class="form-group">
-                                <label>Phone Number (digits only)</label>
-                                <input class="form-input" id="fileNumber" placeholder="919704107158" required
-                                    pattern="[0-9]+">
+                                <label>Phone Number or Group ID</label>
+                                <input class="form-input" id="fileNumber" placeholder="919704107158 or 123-456@g.us" required>
                             </div>
                             <div class="form-group">
                                 <label>PDF URL (HTTPS)</label>
@@ -201,9 +199,8 @@
                                 <select class="form-input" id="imgDeviceId" required></select>
                             </div>
                             <div class="form-group">
-                                <label>Phone Number (digits only)</label>
-                                <input class="form-input" id="imgNumber" placeholder="919704107158" required
-                                    pattern="[0-9]+">
+                                <label>Phone Number or Group ID</label>
+                                <input class="form-input" id="imgNumber" placeholder="919704107158 or 123-456@g.us" required>
                             </div>
                             <div class="form-group">
                                 <label>Image URL (HTTPS)</label>
@@ -216,6 +213,23 @@
                             </div>
                             <button type="submit" class="btn btn-primary">Send Image</button>
                         </form>
+                    </div>
+
+                    <!-- Groups Fetching -->
+                    <div class="card mt-2">
+                        <div class="card-header">
+                            <h3>📦 Fetch Groups</h3>
+                        </div>
+                        <form id="fetchGroupsForm">
+                            <div class="form-group">
+                                <label>Device ID</label>
+                                <select class="form-input" id="groupsDeviceId" required></select>
+                            </div>
+                            <button type="submit" class="btn btn-outline">Load Groups</button>
+                        </form>
+                        <div id="groupsList" class="mt-2" style="max-height: 250px; overflow-y: auto;">
+                            <!-- Groups will be listed here -->
+                        </div>
                     </div>
                 </section>
 

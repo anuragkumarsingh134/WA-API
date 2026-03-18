@@ -267,9 +267,32 @@ async function restoreAllSessions() {
  * Format a phone number into a WhatsApp JID.
  */
 function formatJID(number) {
+    if (number.includes('@')) {
+        return number;
+    }
     // Strip any non-digit characters
     const clean = number.replace(/\D/g, '');
     return `${clean}@s.whatsapp.net`;
+}
+
+/**
+ * Fetch all groups the device is participating in.
+ */
+async function getGroups(deviceId) {
+    const socket = sessionManager.getSession(deviceId);
+    if (!socket) {
+        throw new Error('Session not found or not connected');
+    }
+
+    const groups = await socket.groupFetchAllParticipating();
+    return Object.values(groups).map(g => ({
+        id: g.id,
+        subject: g.subject,
+        creation: g.creation,
+        owner: g.owner,
+        desc: g.desc,
+        participantsCount: g.participants?.length || 0,
+    }));
 }
 
 /**
@@ -304,6 +327,7 @@ module.exports = {
     sendTextMessage,
     sendFileMessage,
     sendImageMessage,
+    getGroups,
     restoreAllSessions,
     deleteSession,
 };
